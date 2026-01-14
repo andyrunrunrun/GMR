@@ -54,6 +54,7 @@ class RobotMotionViewer:
                 video_width=640,
                 video_height=480,
                 keyboard_callback=None,
+                headless=False,
                 ):
         
         self.robot_type = robot_type
@@ -68,24 +69,39 @@ class RobotMotionViewer:
         self.rate_limiter = RateLimiter(frequency=self.motion_fps, warn=False)
         self.camera_follow = camera_follow
         self.record_video = record_video
+        self.headless = headless
+        self.video_width = video_width
+        self.video_height = video_height
 
-
-        self.viewer = mjv.launch_passive(
-            model=self.model,
-            data=self.data,
-            show_left_ui=False,
-            show_right_ui=False, 
-            key_callback=keyboard_callback
+        if self.headless:
+            # Headless mode: no window, use offscreen rendering
+            self.viewer = None
+            # Initialize camera for offscreen rendering
+            self.cam = mj.MjvCamera()
+            self.cam.distance = self.viewer_cam_distance
+            self.cam.elevation = -10
+            # self.cam.azimuth = 180
+            self.opt = mj.MjvOption()
+            self.opt.flags[mj.mjtVisFlag.mjVIS_TRANSPARENT] = transparent_robot
+            
+            if not self.record_video:
+                print("[yellow]Warning: headless mode without record_video, nothing will be displayed[/yellow]")
+        else:
+            self.viewer = mjv.launch_passive(
+                model=self.model,
+                data=self.data,
+                show_left_ui=False,
+                show_right_ui=False, 
+                key_callback=keyboard_callback
             )      
-
-        self.viewer.opt.flags[mj.mjtVisFlag.mjVIS_TRANSPARENT] = transparent_robot
+            self.viewer.opt.flags[mj.mjtVisFlag.mjVIS_TRANSPARENT] = transparent_robot
         
         if self.record_video:
             assert video_path is not None, "Please provide video path for recording"
             self.video_path = video_path
             video_dir = os.path.dirname(self.video_path)
             
-            if not os.path.exists(video_dir):
+            if video_dir and not os.path.exists(video_dir):
                 os.makedirs(video_dir)
             self.mp4_writer = imageio.get_writer(self.video_path, fps=self.motion_fps)
             print(f"Recording video to {self.video_path}")
@@ -123,39 +139,55 @@ class RobotMotionViewer:
         
         mj.mj_forward(self.model, self.data)
         
-        if follow_camera:
-            self.viewer.cam.lookat = self.data.xpos[self.model.body(self.robot_base).id]
-            self.viewer.cam.distance = self.viewer_cam_distance
-            self.viewer.cam.elevation = -10  # 正面视角，轻微向下看
-            # self.viewer.cam.azimuth = 180    # 正面朝向机器人
-        
-        if human_motion_data is not None:
-            # Clean custom geometry
-            self.viewer.user_scn.ngeom = 0
-            # Draw the task targets for reference
-            for human_body_name, (pos, rot) in human_motion_data.items():
-                draw_frame(
-                    pos,
-                    R.from_quat(rot, scalar_first=True).as_matrix(),
-                    self.viewer,
-                    human_point_scale,
-                    pos_offset=human_pos_offset,
-                    joint_name=human_body_name if show_human_body_name else None
-                    )
+        if self.headless:
+            # Headless mode: update camera position for offscreen rendering
+            if follow_camera:
+                self.cam.lookat = self.data.xpos[self.model.body(self.robot_base).id]
+                self.cam.distance = self.viewer_cam_distance
+                self.cam.elevation = -10
+            
+            if self.record_video:
+                self.renderer.update_scene(self.data, camera=self.cam)
+                img = self.renderer.render()
+                self.mp4_writer.append_data(img)
+            
+            if rate_limit:
+                self.rate_limiter.sleep()
+        else:
+            if follow_camera:
+                self.viewer.cam.lookat = self.data.xpos[self.model.body(self.robot_base).id]
+                self.viewer.cam.distance = self.viewer_cam_distance
+                self.viewer.cam.elevation = -10  # 正面视角，轻微向下看
+                # self.viewer.cam.azimuth = 180    # 正面朝向机器人
+            
+            if human_motion_data is not None:
+                # Clean custom geometry
+                self.viewer.user_scn.ngeom = 0
+                # Draw the task targets for reference
+                for human_body_name, (pos, rot) in human_motion_data.items():
+                    draw_frame(
+                        pos,
+                        R.from_quat(rot, scalar_first=True).as_matrix(),
+                        self.viewer,
+                        human_point_scale,
+                        pos_offset=human_pos_offset,
+                        joint_name=human_body_name if show_human_body_name else None
+                        )
 
-        self.viewer.sync()
-        if rate_limit is True:
-            self.rate_limiter.sleep()
+            self.viewer.sync()
+            if rate_limit is True:
+                self.rate_limiter.sleep()
 
-        if self.record_video:
-            # Use renderer for proper offscreen rendering
-            self.renderer.update_scene(self.data, camera=self.viewer.cam)
-            img = self.renderer.render()
-            self.mp4_writer.append_data(img)
+            if self.record_video:
+                # Use renderer for proper offscreen rendering
+                self.renderer.update_scene(self.data, camera=self.viewer.cam)
+                img = self.renderer.render()
+                self.mp4_writer.append_data(img)
     
     def close(self):
-        self.viewer.close()
-        time.sleep(0.5)
+        if self.viewer is not None:
+            self.viewer.close()
+            time.sleep(0.5)
         if self.record_video:
             self.mp4_writer.close()
             print(f"Video saved to {self.video_path}")

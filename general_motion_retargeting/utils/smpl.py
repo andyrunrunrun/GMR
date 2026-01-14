@@ -13,10 +13,11 @@ def load_smpl_file(smpl_file):
 
 def load_smplx_file(smplx_file, smplx_body_model_path):
     smplx_data = np.load(smplx_file, allow_pickle=True)
+    gender = str(smplx_data["gender"]) if "gender" in smplx_data else "male"
     body_model = smplx.create(
         smplx_body_model_path,
         "smplx",
-        gender=str(smplx_data["gender"]),
+        gender=gender,
         use_pca=False,
     )
     # print(smplx_data["pose_body"].shape)

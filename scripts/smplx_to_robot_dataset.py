@@ -83,7 +83,7 @@ def process_file(smplx_file_path, tgt_file_path, tgt_robot, SMPLX_FOLDER, tgt_fo
     )
     qpos_list = []
     for smplx_frame_data in smplx_frame_data_list:
-        qpos = retargeter.retarget(smplx_frame_data)
+        qpos = retargeter.retarget(smplx_frame_data,offset_to_ground=True)
         qpos_list.append(qpos.copy())
 
     qpos_list = np.array(qpos_list)
@@ -179,7 +179,7 @@ def main():
                         )
     
     parser.add_argument("--override", default=False, action="store_true")
-    parser.add_argument("--num_cpus", default=4, type=int)
+    parser.add_argument("--num_cpus", default=12, type=int)
     args = parser.parse_args()
     
     # print the total number of cpus and gpus

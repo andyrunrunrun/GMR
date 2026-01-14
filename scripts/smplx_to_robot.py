@@ -130,7 +130,7 @@ if __name__ == "__main__":
         smplx_data = smplx_data_frames[i]
 
         # retarget
-        qpos = retarget.retarget(smplx_data)
+        qpos = retarget.retarget(smplx_data,offset_to_ground=True)
 
         # visualize
         robot_motion_viewer.step(

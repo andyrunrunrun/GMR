@@ -1,5 +1,6 @@
 from rich import print
 
+xrt = None  # 默认为 None
 try:
     import xrobotoolkit_sdk as xrt
 except:
@@ -14,6 +15,11 @@ import os
 
 class XRobotStreamer:
     def __init__(self):
+        if xrt is None:
+            raise ImportError(
+                "xrobotoolkit_sdk 未安装！XRobotStreamer 需要该 SDK 才能接收 VR 数据。\n"
+                "请确保 VR 设备已连接并正确安装 xrobotoolkit_sdk。"
+            )
         xrt.init()
 
         # Joint names for reference
